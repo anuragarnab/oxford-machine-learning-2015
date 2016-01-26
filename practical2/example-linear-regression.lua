@@ -140,7 +140,7 @@ feval = function(x_new)
    end
 
    -- select a new training sample
-   _nidx_ = (_nidx_ or 0) + 1
+   _nidx_ = (_nidx_ or 0) + 1 -- This whole "nidx or 0" is to account for the fact that on the first function call, _nidx_ will be uninitialised, and so will have a value of "Nil" (since that is what Lua does to uninitialised variables)
    if _nidx_ > (#data)[1] then _nidx_ = 1 end
 
    local sample = data[_nidx_]
@@ -149,11 +149,11 @@ feval = function(x_new)
 
    -- reset gradients (gradients are always accumulated, to accommodate 
    -- batch methods)
-   dl_dx:zero()
+   dl_dx:zero() -- This variable is visible from outside the scope of this function. 
 
    -- evaluate the loss function and its derivative wrt x, for that sample
    local loss_x = criterion:forward(model:forward(inputs), target)
-   model:backward(inputs, criterion:backward(model.output, target))
+   model:backward(inputs, criterion:backward(model.output, target)) -- this will update dl_dx on its own
 
    -- return loss(x) and dloss/dx
    return loss_x, dl_dx
@@ -179,6 +179,8 @@ sgd_params = {
 -- at each iteration. The number of iterations is found empirically here,
 -- but should typically be determinined using cross-validation.
 
+-- Or we can just let it run forever and do early-stopping (ie stop when we think the error on the validation set is low enough)
+
 -- we cycle 1e4 times over our training data
 for i = 1,1e4 do
 
@@ -195,10 +197,10 @@ for i = 1,1e4 do
       --   + a point x
       --   + some parameters, which are algorithm-specific
       
-      _,fs = optim.sgd(feval,x,sgd_params)
+      model_params,fs = optim.sgd(feval,x,sgd_params)
 
       -- Functions in optim all return two things:
-      --   + the new x, found by the optimization method (here SGD)
+      --   + the new x, found by the optimization method (here SGD) (x refers to the model parameters, not the training data)
       --   + the value of the loss functions at all points that were used by
       --     the algorithm. SGD only estimates the function once, so
       --     that list just contains one value.
@@ -208,7 +210,7 @@ for i = 1,1e4 do
 
    -- report average error on epoch
    current_loss = current_loss / (#data)[1]
-   print('current loss = ' .. current_loss)
+   print('current loss = ' .. current_loss .. ' model parameters ' .. model_params)
 
 end
 
@@ -229,7 +231,7 @@ text = {40.32, 42.92, 45.33, 48.85, 52.37, 57, 61.82, 69.78, 72.19, 79.42}
 
 print('id  approx   text')
 for i = 1,(#data)[1] do
-   local myPrediction = model:forward(data[i][{{2,3}}])
+   local myPrediction = model:forward(data[i][{{2,3}}]) -- testing on the training data
    print(string.format("%2d  %6.2f %6.2f", i, myPrediction[1], text[i]))
 end
 
