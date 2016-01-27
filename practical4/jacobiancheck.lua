@@ -11,7 +11,7 @@ local function jacobian_wrt_input(module, x, eps)
   local one_hot = torch.zeros(z:size())
   for i = 1, z:size(1) do
     one_hot[i] = 1
-    jac[i]:copy(module:backward(x, one_hot))
+    jac[i]:copy(module:backward(x, one_hot)) -- one_hot = dL/dout. So when you make dL/dout non-zero for only one element, then you end up getting the gradient for one of the outputs with respect to all the parameters. This is one row of the Jacobian
     one_hot[i] = 0
   end
   
@@ -21,10 +21,20 @@ local function jacobian_wrt_input(module, x, eps)
     -- TODO: modify this to perform a two-sided estimate. Remember to do this carefully, because 
     --       nn modules reuse their output buffer across different calls to forward.
     -- ONE-sided estimate
+    --x[i] = x[i] + eps
+    --local z_offset = module:forward(x)
+    --x[i] = x[i] - eps
+    --jac_est[{ {},i }]:copy(z_offset):add(-1, z):div(eps)
+    
+    -- two-sided estimate
     x[i] = x[i] + eps
-    local z_offset = module:forward(x)
-    x[i] = x[i] - eps
-    jac_est[{{},i}]:copy(z_offset):add(-1, z):div(eps)
+    local z_plus = module:forward(x):clone()
+    x[i] = x[i] - 2*eps
+    local z_minus = module:forward(x)
+    local diff = z_plus - z_minus
+    
+    jac_est[{ {},{i} }]:copy(diff):div(2*eps)
+    
   end
 
   -- computes (symmetric) relative error of gradient

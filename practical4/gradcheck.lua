@@ -9,6 +9,8 @@ local opt = { nonlinearity_type = 'requ' }
 -- g returns the true gradient (assumes input to f is a 1d tensor)
 -- returns difference, true gradient, and estimated gradient
 local function checkgrad(f, g, x, eps)
+-- This function is gradient-checking with respect to all the parameters in the network. Not only those of a specific layer
+
   -- compute true gradient
   local grad = g(x)
   
@@ -18,8 +20,10 @@ local function checkgrad(f, g, x, eps)
   for i = 1, grad:size(1) do
     -- TODO: do something with x[i] and evaluate f twice, and put your estimate of df/dx_i into grad_est[i]
     x[i] = x[i] + eps
-    ...something(s) here
-    grad_est[i] = ...something here
+    f_plus = f(x)
+    x[i] = x[i] - 2*eps
+    f_minus = f(x)
+    grad_est[i] = (f_plus - f_minus) / (2 * eps)
   end
 
   -- computes (symmetric) relative error of gradient
