@@ -38,7 +38,7 @@ gnuplot.plot({'sigmoid',
   )
 
 models = { 
-    --requ = model_requ,  -- TODO: uncomment once you implement requ
+    requ = model_requ,  -- TODO: uncomment once you implement requ
     sigmoid = model_sigmoid 
 }
 for model_name, model in pairs(models) do
