@@ -16,16 +16,24 @@ require 'dataset-mnist'
 -- INITIALIZATION AND DATA
 ------------------------------------------------------------------------------
 
+-- Function that I use for working out the classification error
+count = 0
+equals = function (a,b)
+    if (a == b) then
+        count = count + 1
+    end
+end
+
 torch.manualSeed(1)    -- fix random seed so program runs the same every time
 
 -- TODO: play with these optimizer options for the second handin item, as described in the writeup
 -- NOTE: see below for optimState, storing optimiser settings
 local opt = {}         -- these options are used throughout
-opt.optimization = 'adagrad'
-opt.batch_size = 32
+opt.optimization = 'sgd'
+opt.batch_size = 64
 opt.train_size = 8000  -- set to 0 or 60000 to use all 60000 training data
 opt.test_size = 0      -- 0 means load all data
-opt.epochs = 2        -- **approximate** number of passes through the training data (see below for the `iterations` variable, which is calculated from this)
+opt.epochs = 8        -- **approximate** number of passes through the training data (see below for the `iterations` variable, which is calculated from this)
 
 -- NOTE: the code below changes the optimization algorithm used, and its settings
 local optimState       -- stores a lua table with the optimization algorithm's settings, and state during iterations
@@ -40,15 +48,15 @@ if opt.optimization == 'lbfgs' then
   optimMethod = optim.lbfgs
 elseif opt.optimization == 'sgd' then
   optimState = {
-    learningRate = 1e-3,
+    learningRate = 1e-2,
     weightDecay = 0,
-    momentum = 0,
+    momentum = 0.99,
     learningRateDecay = 1e-7 -- is this after every epoch? Or after every iteration?
   }
   optimMethod = optim.sgd
 elseif opt.optimization == 'adagrad' then
   optimState = {
-    learningRate = 1e-1, -- adagrad is actually not even meant to require an initial learning rate. But having an initial multiplier works better in practice
+    learningRate = 1e-0, -- adagrad is actually not even meant to require an initial learning rate. But having an initial multiplier works better in practice
   }
   optimMethod = optim.adagrad
 else
@@ -174,8 +182,10 @@ end
 ------------------------------------------------------------------------
 -- OPTIMIZE: FIRST HANDIN ITEM
 ------------------------------------------------------------------------
-losses = {}          -- training losses for each iteration/minibatch
-test_losses = {}
+local losses = {}          -- training losses for each iteration/minibatch
+local test_losses = {}
+local test_errors = {}
+
 local epochs = opt.epochs  -- number of full passes over all the training data
 local iterations = epochs * math.ceil(n_train_data / opt.batch_size) -- integer number of minibatches to process
 -- (note: number of training data might not be divisible by the batch size, so we round up)
@@ -203,35 +213,54 @@ for i = 1, iterations do
   -- fluctuate upwards slightly (i.e. the loss estimate is noisy).
   if i % 10 == 0 then -- don't print *every* iteration, this is enough to get the gist
       print(string.format("minibatches processed: %6s, loss = %6.6f", i, minibatch_loss[1]))
+      
+      --local debugger = require('fb.debugger')
+      --debugger.enter()
+      
+      losses[#losses + 1] = minibatch_loss[1] -- append the new loss
+    
+      local test_logprob = model:forward(test.data)  
+      local test_loss = criterion:forward( test_logprob, test.labels)
+      test_losses[#test_losses + 1] = test_loss
+      
+      local _, classPredictions = torch.max(test_logprob, 2)
+      count = 0
+      classPredictions:map(test.labels:long(), equals) 
+      accuracy = (count / test.labels:size()[1])  * 100
+      -- print("Error is " .. 100 - accuracy .. "%")
+      
+      test_errors[#test_errors + 1] = (100-accuracy)
+      
   end
   -- TIP: use this same idea of not saving the test loss in every iteration if you want to increase speed.
   -- Then you can get, 10 (for example) times fewer values than the training loss. If you do this,
   -- you just have to be careful to give the correct x-values to the plotting function, rather than
   -- Tensor{1,2,...,#losses}. HINT: look up the torch.linspace function, and note that torch.range(1, #losses)
   -- is the same as torch.linspace(1, #losses, #losses).
-
-  losses[#losses + 1] = minibatch_loss[1] -- append the new loss
-  
-  test_loss = criterion:forward( model:forward(test.data), test.labels)
-  test_losses[#test_losses + 1] = test_loss
-  
+ 
 end
 
 -- TODO: for the first handin item, evaluate test loss above, and add to the plot below
 --       see TIP/HINT above if you want to make the optimization loop faster
 
 -- Turn table of losses into a torch Tensor, and plot it
-gnuplot.plot({
-  torch.range(1, #losses),        -- x-coordinates for data to plot, creates a tensor holding {1,2,3,...,#losses}
-  torch.Tensor(losses),           -- y-coordinates (the training losses)
-  '-'})
-gnuplot.axis('auto')
+--gnuplot.plot({
+--  torch.range(1, #losses),        -- x-coordinates for data to plot, creates a tensor holding {1,2,3,...,#losses}
+--  torch.Tensor(losses),           -- y-coordinates (the training losses)
+--  '-'})
+
+
 
 gnuplot.plot(
-    {'Train loss', torch.range(1,#losses), torch.Tensor(losses)},
-    {'Test loss', torch.range(1, #losses), torch.Tensor(test_losses)}
+    {'Train loss', torch.linspace(1, iterations, iterations/10), torch.Tensor(losses)},
+    {'Test loss', torch.linspace(1, iterations, iterations/10), torch.Tensor(test_losses)}
 )  
+gnuplot.axis('auto')
 
+gnuplot.figure()
+gnuplot.plot(
+    {'Test errors', torch.linspace(1,iterations, iterations/10), torch.Tensor(test_errors)}
+)
 ------------------------------------------------------------------------------
 -- TESTING THE LEARNED MODEL: 2ND HANDIN ITEM
 ------------------------------------------------------------------------------
@@ -241,20 +270,16 @@ local classProbabilities = torch.exp(logProbs)
 local _, classPredictions = torch.max(classProbabilities, 2)
 -- classPredictions holds predicted classes from 1-10
 
-cp = classPredictions
-gt = test.labels
-
 -- TODO: compute test classification error here for the second handin item
 
 count = 0 -- global variable which is updated by this function
-equals = function (a,b)
-    if (a == b) then
-        count = count + 1
-    end
-end
 
 classPredictions:map(test.labels:long(), equals) -- Applies the 'equals' function to all elements of the two Tensors. Will fail if number of elements in either one is not the same
 
 accuracy = (count / test.labels:size()[1])  * 100
 print("Accuracy is " .. accuracy .. "%")
 print("Error is " .. 100 - accuracy .. "%")
+
+local minError, minIndex = torch.min( torch.Tensor(test_errors), 1 ); -- if you don't specify the dimension, Torch does not give you the min/max index !
+
+print("Minimum validation error is " .. minError[1] .. " on Iteration " .. minIndex[1]*10)
