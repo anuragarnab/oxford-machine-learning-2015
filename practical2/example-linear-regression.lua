@@ -182,7 +182,7 @@ sgd_params = {
 -- Or we can just let it run forever and do early-stopping (ie stop when we think the error on the validation set is low enough)
 
 -- we cycle 1e4 times over our training data
-for i = 1,1e4 do
+for i = 1,1e3 do
 
    -- this variable is used to estimate the average loss
    current_loss = 0
@@ -227,6 +227,9 @@ end
 
 -- We compare our approximate results with the text's results.
 
+print('Model parameters:')
+print(model_params)
+
 text = {40.32, 42.92, 45.33, 48.85, 52.37, 57, 61.82, 69.78, 72.19, 79.42}
 
 print('id  approx   text')
@@ -235,3 +238,30 @@ for i = 1,(#data)[1] do
    print(string.format("%2d  %6.2f %6.2f", i, myPrediction[1], text[i]))
 end
 
+-- Now let us use some different test data
+test_data = torch.Tensor( {{6, 4},{10, 5},{14, 8}} )
+
+print('Using different test data')
+
+for i = 1,test_data:size()[1] do
+    local prediction = model:forward(test_data[{ {i},{} }])
+    print(string.format("%2d  %6.2", i, myPrediction[1] ))
+end
+
+
+-- Solve for the parameters analytically
+-- if y = Xw
+-- w = pinv(X)*y where pinv() is the pseudo-inverse inv(x'x)x'
+
+local y = data[{ {},{1} }]
+local x = torch.Tensor(data.size()[1], data.size()[2] + 1)
+x[{ {},{1,2} }] = data[{ {},{2,3} }]
+x[{ {},{3}   }]:fill(1) -- Add in constant of 1 for the bias
+
+solution = torch.inverse((x:t()*x))*x:t()*y
+
+print('Model parameters:')
+print(model_params)
+
+print('Analytical solution')
+print(solution)
