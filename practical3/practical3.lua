@@ -21,11 +21,11 @@ torch.manualSeed(1)    -- fix random seed so program runs the same every time
 -- TODO: play with these optimizer options for the second handin item, as described in the writeup
 -- NOTE: see below for optimState, storing optimiser settings
 local opt = {}         -- these options are used throughout
-opt.optimization = 'sgd'
-opt.batch_size = 3
+opt.optimization = 'adagrad'
+opt.batch_size = 32
 opt.train_size = 8000  -- set to 0 or 60000 to use all 60000 training data
 opt.test_size = 0      -- 0 means load all data
-opt.epochs = 2         -- **approximate** number of passes through the training data (see below for the `iterations` variable, which is calculated from this)
+opt.epochs = 2        -- **approximate** number of passes through the training data (see below for the `iterations` variable, which is calculated from this)
 
 -- NOTE: the code below changes the optimization algorithm used, and its settings
 local optimState       -- stores a lua table with the optimization algorithm's settings, and state during iterations
@@ -35,20 +35,20 @@ if opt.optimization == 'lbfgs' then
   optimState = {
     learningRate = 1e-1,
     maxIter = 2,
-    nCorrection = 10
+    nCorrection = 10 -- what is this?
   }
   optimMethod = optim.lbfgs
 elseif opt.optimization == 'sgd' then
   optimState = {
-    learningRate = 1e-1,
+    learningRate = 1e-3,
     weightDecay = 0,
     momentum = 0,
-    learningRateDecay = 1e-7
+    learningRateDecay = 1e-7 -- is this after every epoch? Or after every iteration?
   }
   optimMethod = optim.sgd
 elseif opt.optimization == 'adagrad' then
   optimState = {
-    learningRate = 1e-1,
+    learningRate = 1e-1, -- adagrad is actually not even meant to require an initial learning rate. But having an initial multiplier works better in practice
   }
   optimMethod = optim.adagrad
 else
@@ -62,7 +62,7 @@ local function load_dataset(train_or_test, count)
     -- load
     local data
     if train_or_test == 'train' then
-        data = mnist.loadTrainSet(count, {32, 32})
+        data = mnist.loadTrainSet(count, {32, 32}) -- the "geometry" parameter passed into this function is unused internally!
     else
         data = mnist.loadTestSet(count, {32, 32})
     end
@@ -70,13 +70,14 @@ local function load_dataset(train_or_test, count)
     -- shuffle the dataset
     local shuffled_indices = torch.randperm(data.data:size(1)):long()
     -- creates a shuffled *copy*, with a new storage
+        -- This does not look like a deep copy is being performed. And it is being done into the same variable anyway.
     data.data = data.data:index(1, shuffled_indices):squeeze()
     data.labels = data.labels:index(1, shuffled_indices):squeeze()
 
     -- TODO: (optional) UNCOMMENT to display a training example
     -- for more, see torch gnuplot package documentation:
     -- https://github.com/torch/gnuplot#plotting-package-manual-with-gnuplot
-    --gnuplot.imagesc(data.data[10])
+    gnuplot.imagesc(data.data[10])
 
     -- vectorize each 2D data point into 1D
     data.data = data.data:reshape(data.data:size(1), 32*32)
@@ -99,7 +100,7 @@ local test = load_dataset('test', opt.test_size)
 
 local n_train_data = train.data:size(1) -- number of training data
 local n_inputs = train.data:size(2)     -- number of cols = number of dims of input
-local n_outputs = train.labels:max()    -- highest label = # of classes
+local n_outputs = train.labels:max() - train.labels:min() + 1   -- # of classes
 
 print(train.labels:max())
 print(train.labels:min())
@@ -121,6 +122,7 @@ local criterion = nn.ClassNLLCriterion()
 ------------------------------------------------------------------------------
 
 local parameters, gradParameters = model:getParameters()
+print("Type of parameters is " .. parameters:type() .. ". Type of gradParameters is " .. gradParameters:type())
 
 ------------------------------------------------------------------------
 -- Define closure with mini-batches 
@@ -162,7 +164,7 @@ local feval = function(x)
   -- 3. compute the derivative of the loss wrt the outputs of the model
   local dloss_doutput = criterion:backward(batch_outputs, batch_targets) 
   -- 4. use gradients to update weights, we'll understand this step more next week
-  model:backward(batch_inputs, dloss_doutput)
+  model:backward(batch_inputs, dloss_doutput) -- this updates the "gradParameters" tensor directly, which is what we return
 
   -- optim expects us to return
   --     loss, (gradient of loss with respect to the weights that we're optimizing)
@@ -172,7 +174,8 @@ end
 ------------------------------------------------------------------------
 -- OPTIMIZE: FIRST HANDIN ITEM
 ------------------------------------------------------------------------
-local losses = {}          -- training losses for each iteration/minibatch
+losses = {}          -- training losses for each iteration/minibatch
+test_losses = {}
 local epochs = opt.epochs  -- number of full passes over all the training data
 local iterations = epochs * math.ceil(n_train_data / opt.batch_size) -- integer number of minibatches to process
 -- (note: number of training data might not be divisible by the batch size, so we round up)
@@ -208,6 +211,10 @@ for i = 1, iterations do
   -- is the same as torch.linspace(1, #losses, #losses).
 
   losses[#losses + 1] = minibatch_loss[1] -- append the new loss
+  
+  test_loss = criterion:forward( model:forward(test.data), test.labels)
+  test_losses[#test_losses + 1] = test_loss
+  
 end
 
 -- TODO: for the first handin item, evaluate test loss above, and add to the plot below
@@ -218,6 +225,12 @@ gnuplot.plot({
   torch.range(1, #losses),        -- x-coordinates for data to plot, creates a tensor holding {1,2,3,...,#losses}
   torch.Tensor(losses),           -- y-coordinates (the training losses)
   '-'})
+gnuplot.axis('auto')
+
+gnuplot.plot(
+    {'Train loss', torch.range(1,#losses), torch.Tensor(losses)},
+    {'Test loss', torch.range(1, #losses), torch.Tensor(test_losses)}
+)  
 
 ------------------------------------------------------------------------------
 -- TESTING THE LEARNED MODEL: 2ND HANDIN ITEM
@@ -228,5 +241,20 @@ local classProbabilities = torch.exp(logProbs)
 local _, classPredictions = torch.max(classProbabilities, 2)
 -- classPredictions holds predicted classes from 1-10
 
+cp = classPredictions
+gt = test.labels
+
 -- TODO: compute test classification error here for the second handin item
 
+count = 0 -- global variable which is updated by this function
+equals = function (a,b)
+    if (a == b) then
+        count = count + 1
+    end
+end
+
+classPredictions:map(test.labels:long(), equals) -- Applies the 'equals' function to all elements of the two Tensors. Will fail if number of elements in either one is not the same
+
+accuracy = (count / test.labels:size()[1])  * 100
+print("Accuracy is " .. accuracy .. "%")
+print("Error is " .. 100 - accuracy .. "%")

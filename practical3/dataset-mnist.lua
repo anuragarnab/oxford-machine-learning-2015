@@ -17,7 +17,7 @@ function mnist.download()
 end
 
 function mnist.loadTrainSet(maxLoad, geometry)
-   return mnist.loadDataset(mnist.path_trainset, maxLoad, geometry)
+   return mnist.loadDataset(mnist.path_trainset, maxLoad, geometry) --wtf. The "loadDataset" function only takes in 2 arguements, 3 are supplied here
 end
 
 function mnist.loadTestSet(maxLoad, geometry)
