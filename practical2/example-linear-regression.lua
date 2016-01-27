@@ -210,7 +210,7 @@ for i = 1,1e3 do
 
    -- report average error on epoch
    current_loss = current_loss / (#data)[1]
-   print('current loss = ' .. current_loss .. ' model parameters ' .. model_params)
+   print('current loss = ' .. current_loss)
 
 end
 
@@ -245,7 +245,8 @@ print('Using different test data')
 
 for i = 1,test_data:size()[1] do
     local prediction = model:forward(test_data[{ {i},{} }])
-    print(string.format("%2d  %6.2", i, myPrediction[1] ))
+    print(prediction)
+    --print(string.format("%2d %6.2f", i, prediction[1] ))
 end
 
 
@@ -254,7 +255,7 @@ end
 -- w = pinv(X)*y where pinv() is the pseudo-inverse inv(x'x)x'
 
 local y = data[{ {},{1} }]
-local x = torch.Tensor(data.size()[1], data.size()[2] + 1)
+local x = torch.Tensor(data:size()[1], data:size()[2])
 x[{ {},{1,2} }] = data[{ {},{2,3} }]
 x[{ {},{3}   }]:fill(1) -- Add in constant of 1 for the bias
 
