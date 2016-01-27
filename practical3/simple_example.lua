@@ -24,14 +24,14 @@ local function feval(x_vec)
     local x = x_vec[1]
 
     -- compute and return func val (scalar), and gradient (Tensor)
-    f = 0.5*x^2 + x*torch.sin(x)
-    grad[1] = x + torch.sin(x) + x*torch.cos(x)
+    f = 0.5*x^2 + x*torch.sin(x) -- Note, f is a global variable here
+    grad[1] = x + torch.sin(x) + x*torch.cos(x) -- this refers to the grad variable defined previously
     return f, grad
 end
 
 -- where to start the algorithm (usually random, but here we won't since it's a demo)
 -- NOTE: try a few starting points, using the plot for pointers
-local x = torch.Tensor{5}
+local x = torch.Tensor{3}  -- the previous x variable was local to the function
 
 -- optim functions use this table for bookkeeping and for reading options
 local state = { learningRate = 1e-2 }
@@ -41,16 +41,22 @@ local iter = 0
 while true do
     -- optim has multiple functions, such as adagrad, sgd, lbfgs, and others
     -- see documentation for more details
-    optim.adagrad(feval, x, state)
+    point, fx = optim.adagrad(feval, x, state) -- so the x being passed into here is like a reference. It is being updated by the function, although it is not returened
+    -- This is actually quite obvious! Since x is a Tensor, and Tensor's are stored by reference, not value!
 
     -- gradient norm is SOMETIMES a good measure of how close we are to the optimum, but often not.
     -- the issue is that we'd stop at points like x=0 for x^3
     if grad:norm() < 0.005 or iter > 50000 then 
         break 
     end
+    
+    if (iter%1000 == 1) then
+        print ("Iteration " .. iter ..  " Loss = " .. fx[1] .. " Point " .. point[1] .. " " .. x[1])
+    end
+    
     iter = iter + 1
 end
 
 print(string.format("%.6f", x[1]))
-
+print(string.format("Function value: %.4f Point: %.6f", fx[1], point[1]))
 
