@@ -181,8 +181,8 @@ sgd_params = {
 
 -- Or we can just let it run forever and do early-stopping (ie stop when we think the error on the validation set is low enough)
 
--- we cycle 1e4 times over our training data
-for i = 1,1e3 do
+-- we cycle 1e5 times over our training data
+for i = 1,1e5 do
 
    -- this variable is used to estimate the average loss
    current_loss = 0
@@ -245,8 +245,7 @@ print('Using different test data')
 
 for i = 1,test_data:size()[1] do
     local prediction = model:forward(test_data[{ {i},{} }])
-    print(prediction)
-    --print(string.format("%2d %6.2f", i, prediction[1] ))
+    print(string.format("%2d %6.2f", i, prediction[1][1] ))
 end
 
 
